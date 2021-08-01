@@ -4,29 +4,50 @@ import mysql.connector as mysql
 from rich.panel import Panel
 from rich import print
 
-conn = mysql.connect(
+with mysql.connect(
     host = 'localhost',
     user = 'root',
     password = '',# <- Data Base Password.
     database = ''# <- Data Base Name.
-)
+) as conn:
 
-cursor = conn.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER AUTO_INCREMENT PRIMARY KEY,user_name VARCHAR(20) UNIQUE, user_hash VARBINARY(85), user_salt VARBINARY(85))")
+    cursor = conn.cursor()
+    #users
+    cursor.execute("CREATE TABLE IF NOT EXISTS users(user_id INTEGER AUTO_INCREMENT PRIMARY KEY, user_name VARCHAR(20) UNIQUE, user_hash VARBINARY(85), user_salt VARBINARY(85), role_id INT)")
+    #roles
+    cursor.execute("CREATE TABLE IF NOT EXISTS roles (id INTEGER AUTO_INCREMENT PRIMARY KEY, role_id INTEGER UNIQUE, role_name VARCHAR(20) UNIQUE)")
 
 def create_user():
     username = str(input('Username : ')).lower()
     password = str(input('Password : '))
+    try:
+        access_level = int(input('Access Level: 1-5 : '))
+        if access_level > 5:
+            print('Must be in range 1-5...')
+            return
+        elif access_level <= 0:
+            print('Must be in range of 1-5...')
+            return
+    except ValueError:
+        print('Only integers allowed...')
+        return
 
     salt = os.urandom(32)
     hashed_password = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 1000)
 
     try:
-        add_info = "INSERT INTO users (user_name, user_hash, user_salt) VALUES (%s, %s, %s)"
-        info = (username, hashed_password, salt)
+        with mysql.connect(
+            host = 'localhost',
+            user = 'root',
+            password = '',# <- Data Base Password.
+            database = ''# <- Data Base Name.
+        ) as conn:
+            cursor = conn.cursor()
+            add_info = "INSERT INTO users (user_name, user_hash, user_salt, role_id) VALUES (%s, %s, %s, %s)"
+            info = (username, hashed_password, salt, access_level)
 
-        cursor.execute(add_info, info)
-        conn.commit()
+            cursor.execute(add_info, info)
+            conn.commit()
         print(f'User: {username} Created')
     except Exception:
         print('Username already taken! Returning to menu...')
@@ -36,8 +57,16 @@ def login_test():
     username = str(input('Username : ')).lower()
     password = str(input('Password : '))
 
-    cursor.execute('SELECT user_name, user_hash, user_salt FROM users')
-    user_data = cursor.fetchall()
+    with mysql.connect(
+    host = 'localhost',
+    user = 'root',
+    password = '',# <- Data Base Password.
+    database = ''# <- Data Base Name.
+    ) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT user_name, user_hash, user_salt FROM users')
+        user_data = cursor.fetchall()
     for user in user_data:
         if username in user[0]:
             hash, salt = bytes(user[1]), bytes(user[2]) #converts the string hash and salt from the db to a byte for the new hash
